@@ -1,0 +1,38 @@
+.project-title{
+font-size: 30px;
+    padding-top: 60px;
+    /*    padding-left: 30px;
+
+*/
+}
+
+.project-desc{
+      padding-left: 90px;
+      margin-right: 90px;
+
+}
+
+.project-date{
+
+  font-size:15px;
+}
+/*
+.project-desc{
+        padding-left: 10px;
+}
+
+
+
+
+
+.project-desc{
+      padding-left: 30px;
+      margin-right: 90px;
+
+}
+
+img{
+
+  float:left;
+    padding-left: 30px;
+}
