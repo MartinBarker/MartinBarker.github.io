@@ -4,12 +4,11 @@ import './App.css';
 
 function App() {
   const [videoSrc, setVideoSrc] = useState('');
-  const [message, setMessage] = useState('Click Start to transcode');
+  const [message, setMessage] = useState('Click Load to load ffmpeg');
   const [audioFiles, setAudioFiles] = useState([]);
   const [imageFiles, setImageFiles] = useState([]);
-  const ffmpeg = createFFmpeg({
-    log: true,
-  });
+  const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
+  const ffmpeg = React.useMemo(() => createFFmpeg({ log: true }), []);
 
   const handleFileChange = (event) => {
     const files = Array.from(event.target.files);
@@ -19,34 +18,61 @@ function App() {
     setImageFiles(images);
   };
 
-  const renderVideo = async () => {
-    if (audioFiles.length === 0 || imageFiles.length === 0) {
+  const loadFfmpeg = React.useCallback(async () => {
+    if (!ffmpegLoaded) {
+        try {
+            setMessage('Loading ffmpeg-core.js');
+            await ffmpeg.load();
+            setFfmpegLoaded(true);
+            setMessage('ffmpeg loaded. Now you can render the video.');
+        } catch (err) {
+            setMessage('Failed to load ffmpeg');
+            console.error(err);
+        }
+    }
+}, [ffmpeg, ffmpegLoaded]);
+
+const renderVideo = React.useCallback(async () => {
+  if (!ffmpegLoaded) {
+      setMessage('Please load ffmpeg first.');
+      return;
+  }
+
+  if (audioFiles.length === 0 || imageFiles.length === 0) {
       setMessage('Please select at least one audio and one image file.');
       return;
-    }
+  }
 
-    setMessage('Loading ffmpeg-core.js');
-    await ffmpeg.load();
-    setMessage('Start rendering video');
+  try {
+      setMessage('Start rendering video');
+      const audioFile = audioFiles[0];
+      const imageFile = imageFiles[0];
 
-    const audioFile = audioFiles[0];
-    const imageFile = imageFiles[0];
+      ffmpeg.FS('writeFile', 'audio.mp3', await fetchFile(URL.createObjectURL(audioFile)));
+      ffmpeg.FS('writeFile', 'image.jpg', await fetchFile(URL.createObjectURL(imageFile)));
 
-    ffmpeg.FS('writeFile', 'audio.mp3', await fetchFile(URL.createObjectURL(audioFile)));
-    ffmpeg.FS('writeFile', 'image.jpg', await fetchFile(URL.createObjectURL(imageFile)));
+      const command = ['-loop', '1', '-framerate', '2', '-i', 'image.jpg', '-i', 'audio.mp3', '-c:v', 'libx264', '-preset', 'slow', '-tune', 'stillimage', '-crf', '18', '-c:a', 'aac', '-b:a', '192k', '-shortest', 'output.mp4'];
+      console.log('Running ffmpeg command:', command.join(' '));
 
-    const command = ['-loop', '1', '-framerate', '2', '-i', 'image.jpg', '-i', 'audio.mp3', '-c:v', 'libx264', '-preset', 'slow', '-tune', 'stillimage', '-crf', '18', '-c:a', 'aac', '-b:a', '192k', '-shortest', 'output.mp4'];
-    console.log('Running ffmpeg command:', command.join(' '));
+      await ffmpeg.run(...command);
 
-    await ffmpeg.run(...command);
+      setMessage('Complete rendering video');
+      const data = ffmpeg.FS('readFile', 'output.mp4');
+      setVideoSrc(URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' })));
+  } catch (err) {
+      setMessage('Error rendering video');
+      console.error(err);
+  }
+}, [ffmpeg, ffmpegLoaded, audioFiles, imageFiles]);
 
-    setMessage('Complete rendering video');
-    const data = ffmpeg.FS('readFile', 'output.mp4');
-    setVideoSrc(URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' })));
-  };
 
   return (
     <div className="App">
+      <header>
+        <h1>Welcome to My Video Rendering Site</h1>
+        <p>This site allows you to render videos using audio and image files.</p>
+        <p>Created by Martin Barker. This site is a work in progress.</p>
+      </header>
       <input type="file" multiple onChange={handleFileChange} />
       <div>
         <h3>Audio Files</h3>
@@ -73,6 +99,7 @@ function App() {
         </table>
       </div>
       <video src={videoSrc} controls></video><br/>
+      <button onClick={loadFfmpeg} disabled={ffmpegLoaded}>Load ffmpeg</button>
       <button onClick={renderVideo}>Render Video</button>
       <p>{message}</p>
     </div>
